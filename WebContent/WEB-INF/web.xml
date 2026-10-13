@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app version="3.0" xmlns="http://java.sun.com/xml/ns/javaee"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd">
+	<display-name>Duck DPI (ByeDPI) Web Application</display-name>
+	<servlet>
+		<servlet-name>Login Servlet</servlet-name>
+		<servlet-class>org.duckdns.servlets.LoginServlet</servlet-class>
+	</servlet>
+	<servlet>
+		<servlet-name>Account Servlet</servlet-name>
+		<servlet-class>org.duckdns.servlets.AccountServlet</servlet-class>
+	</servlet>
+	<listener>
+		<listener-class>org.duckdns.servlets.DpiLifecycleListener</listener-class>
+	</listener>
+	<servlet>
+		<servlet-name>DPI Servlet</servlet-name>
+		<servlet-class>org.duckdns.servlets.DpiServlet</servlet-class>
+	</servlet>
+	<servlet>
+		<servlet-name>Control Servlet</servlet-name>
+		<servlet-class>org.duckdns.servlets.ControlServlet</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>DPI Servlet</servlet-name>
+		<url-pattern>/dpi</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>Control Servlet</servlet-name>
+		<url-pattern>/control</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>Login Servlet</servlet-name>
+		<url-pattern>/login</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>Login Servlet</servlet-name>
+		<url-pattern>/login-google</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>Login Servlet</servlet-name>
+		<url-pattern>/login-persona</url-pattern>
+	</servlet-mapping>
+	<servlet-mapping>
+		<servlet-name>Account Servlet</servlet-name>
+		<url-pattern>/account</url-pattern>
+	</servlet-mapping>
+	<error-page>
+		<error-code>404</error-code>
+		<location>/404.html</location>
+	</error-page>
+	<error-page>
+		<error-code>500</error-code>
+		<location>/500.html</location>
+	</error-page>
+	<error-page>
+		<error-code>502</error-code>
+		<location>/503.html</location>
+	</error-page>
+	<error-page>
+		<error-code>503</error-code>
+		<location>/503.html</location>
+	</error-page>
+	
+	<!-- TEN MINUTE SESSIONS -->
+	<session-config>
+		<session-timeout>10</session-timeout>
+	</session-config>
+	
+</web-app>

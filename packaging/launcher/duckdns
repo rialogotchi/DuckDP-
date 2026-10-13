@@ -1,0 +1,292 @@
+#!/bin/sh
+# Duck DPI portable launcher (the command is still called "duckdns" so scripts and data keep working).
+#
+#   ./duckdns                    run in the foreground (Ctrl-C stops everything)
+#   ./duckdns start | stop | status | restart
+#   ./duckdns user add NAME      create a login (asks for the password)
+#   ./duckdns user passwd NAME   change a password
+#   ./duckdns user del NAME      delete a user
+#   ./duckdns user list
+#   ./duckdns dpi show           print the DPI proxy settings
+#   ./duckdns dpi set KEY VALUE  KEY: ip | port | args | sni | autostart (on|off)
+#   ./duckdns dpi reset          back to the default settings
+#   ./duckdns byedpi ...         run the bundled ByeDPI (ciadpi) by hand, e.g.  byedpi --help
+#   ./duckdns import-json DIR    import accounts.json of the old local store
+#   ./duckdns pocketbase ...     pass arguments to the bundled pocketbase binary
+#   ./duckdns version | help
+#
+# Everything the user owns lives in $DUCKDNS_HOME (default ~/.duckdns):
+#   config/  data/  logs/  run/  tmp/  jetty-base/
+
+set -u
+
+# ---------------------------------------------------------------- locate ----
+SELF=$0
+if command -v readlink >/dev/null 2>&1; then
+	R=$(readlink -f "$0" 2>/dev/null) && [ -n "$R" ] && SELF=$R
+fi
+APP_DIR=$(cd "$(dirname "$SELF")" && pwd -P)
+DUCKDNS_HOME=${DUCKDNS_HOME:-${HOME:-/tmp}/.duckdns}
+CONFIG_DIR=$DUCKDNS_HOME/config
+DATA_DIR=$DUCKDNS_HOME/data
+LOG_DIR=$DUCKDNS_HOME/logs
+RUN_DIR=$DUCKDNS_HOME/run
+TMP_DIR=$DUCKDNS_HOME/tmp
+BASE_DIR=$DUCKDNS_HOME/jetty-base
+VERSION=$(cat "$APP_DIR/VERSION" 2>/dev/null || echo dev)
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+# ------------------------------------------------------------ java runtime --
+find_java() {
+	if [ -x "$APP_DIR/jre/bin/java" ]; then JAVA="$APP_DIR/jre/bin/java"
+	elif [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then JAVA="$JAVA_HOME/bin/java"
+	elif command -v java >/dev/null 2>&1; then JAVA=$(command -v java)
+	else die "no Java runtime found (the bundled jre/ is missing and there is no java on the PATH)"
+	fi
+}
+
+# ----------------------------------------------------------------- config ---
+get_prop() { # file key
+	sed -n "s/^$2[[:space:]]*=[[:space:]]*//p" "$1" 2>/dev/null | head -n 1
+}
+
+set_prop() { # file key value
+	if grep -q "^$2[[:space:]]*=" "$1" 2>/dev/null; then
+		sed "s|^$2[[:space:]]*=.*|$2=$3|" "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+	else
+		printf '%s=%s\n' "$2" "$3" >> "$1"
+	fi
+}
+
+random_hex() { head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
+
+ensure_config() {
+	mkdir -p "$CONFIG_DIR" "$DATA_DIR/pb_data" "$LOG_DIR" "$RUN_DIR" "$TMP_DIR" "$BASE_DIR/webapps"
+	for f in environment.properties secrets.properties pocketbase.properties duckdns.conf; do
+		[ -f "$CONFIG_DIR/$f" ] || cp "$APP_DIR/config-defaults/$f" "$CONFIG_DIR/$f"
+	done
+	if [ -z "$(get_prop "$CONFIG_DIR/pocketbase.properties" pocketbase.password)" ]; then
+		set_prop "$CONFIG_DIR/pocketbase.properties" pocketbase.password "$(random_hex)"
+	fi
+	chmod 600 "$CONFIG_DIR/pocketbase.properties" 2>/dev/null || true
+
+	# defaults, then the user's duckdns.conf
+	HTTP_HOST=0.0.0.0; HTTP_PORT=8080; POCKETBASE_MANAGED=true; POCKETBASE_PORT=8090
+	JAVA_OPTS="-Xms32m -Xmx256m"
+	DPI_BIN=""
+	# shellcheck disable=SC1090
+	. "$CONFIG_DIR/duckdns.conf"
+	# environment overrides win
+	HTTP_PORT=${DUCKDNS_PORT:-$HTTP_PORT}
+
+	PB_EMAIL=$(get_prop "$CONFIG_DIR/pocketbase.properties" pocketbase.email)
+	PB_PASS=$(get_prop "$CONFIG_DIR/pocketbase.properties" pocketbase.password)
+	export POCKETBASE_EMAIL="$PB_EMAIL" POCKETBASE_PASSWORD="$PB_PASS"
+	if [ "$POCKETBASE_MANAGED" = "true" ]; then
+		export POCKETBASE_URL="http://127.0.0.1:$POCKETBASE_PORT"
+	fi
+	export DUCKDNS_CONFIG_DIR="$CONFIG_DIR"
+
+	# the DPI proxy (ByeDPI / ciadpi) is started and supervised by the web app; it needs these three paths
+	[ -n "$DPI_BIN" ] || DPI_BIN="$APP_DIR/byedpi/ciadpi"
+	export DUCKDNS_DPI_BIN="$DPI_BIN" DUCKDNS_RUN_DIR="$RUN_DIR" DUCKDNS_LOG_DIR="$LOG_DIR"
+}
+
+# ------------------------------------------------------------- processes ----
+pid_alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+
+PB_STARTED_BY_US=0
+JETTY_PID=""
+
+pb_start() {
+	[ "$POCKETBASE_MANAGED" = "true" ] || return 0
+	if pid_alive "$RUN_DIR/pocketbase.pid"; then return 0; fi
+	PB_BIN="$APP_DIR/pocketbase/pocketbase"
+	[ -x "$PB_BIN" ] || die "bundled PocketBase not found: $PB_BIN"
+	# make sure the superuser the app logs in with exists (and has the configured password)
+	"$PB_BIN" superuser upsert "$PB_EMAIL" "$PB_PASS" --dir="$DATA_DIR/pb_data" >>"$LOG_DIR/pocketbase.log" 2>&1 \
+		|| die "could not create the PocketBase superuser - see $LOG_DIR/pocketbase.log"
+	nohup "$PB_BIN" serve --http="127.0.0.1:$POCKETBASE_PORT" --dir="$DATA_DIR/pb_data" >>"$LOG_DIR/pocketbase.log" 2>&1 &
+	echo $! > "$RUN_DIR/pocketbase.pid"
+	PB_STARTED_BY_US=1
+	sleep 1
+	if ! pid_alive "$RUN_DIR/pocketbase.pid"; then
+		tail -n 15 "$LOG_DIR/pocketbase.log" >&2
+		rm -f "$RUN_DIR/pocketbase.pid"
+		die "PocketBase did not start (is port $POCKETBASE_PORT already in use?)"
+	fi
+}
+
+pb_stop() {
+	if pid_alive "$RUN_DIR/pocketbase.pid"; then
+		kill "$(cat "$RUN_DIR/pocketbase.pid")" 2>/dev/null
+	fi
+	rm -f "$RUN_DIR/pocketbase.pid"
+}
+
+# The web app stops its ciadpi child itself. This is the safety net for a web app that was killed
+# hard (kill -9, OOM): remove the ciadpi that is still holding the port. Only touches the pid in
+# run/byedpi.pid, and only if that process really is a ciadpi.
+dpi_cleanup() {
+	f="$RUN_DIR/byedpi.pid"
+	[ -f "$f" ] || return 0
+	p=$(cat "$f" 2>/dev/null)
+	if [ -n "$p" ] && kill -0 "$p" 2>/dev/null && grep -q ciadpi "/proc/$p/cmdline" 2>/dev/null; then
+		kill "$p" 2>/dev/null
+	fi
+	rm -f "$f"
+}
+
+cli_classpath() { printf '%s' "$APP_DIR/app/duckdns-app.jar:$APP_DIR/app/lib/*"; }
+
+run_cli() { # args for AdminCli
+	find_java
+	"$JAVA" -Duser.language=en -Duser.country=US -Dfile.encoding=UTF-8 -Djava.io.tmpdir="$TMP_DIR" \
+		-Dduckdns.config.dir="$CONFIG_DIR" -cp "$(cli_classpath)" org.duckdns.cli.AdminCli "$@"
+}
+
+prepare_base() {
+	cp -f "$APP_DIR/jetty-base/start.ini" "$BASE_DIR/start.ini"
+	cp -f "$APP_DIR/duckdns.war" "$BASE_DIR/webapps/ROOT.war"
+	rm -rf "$TMP_DIR"/jetty-* 2>/dev/null || true
+}
+
+# Replaces the calling (sub)shell with the Jetty JVM - always call it as "jetty_cmd &"
+# so that $! is the pid of java itself.
+jetty_cmd() {
+	find_java
+	cd "$BASE_DIR" || die "cannot enter $BASE_DIR"
+	# shellcheck disable=SC2086
+	exec "$JAVA" $JAVA_OPTS \
+		-Dfile.encoding=UTF-8 -Duser.language=en -Duser.country=US \
+		-Djava.io.tmpdir="$TMP_DIR" \
+		-Dduckdns.config.dir="$CONFIG_DIR" \
+		-Djetty.base="$BASE_DIR" \
+		-jar "$APP_DIR/jetty-home/start.jar" \
+		jetty.http.port="$HTTP_PORT" jetty.http.host="$HTTP_HOST"
+}
+
+# --------------------------------------------------------------- commands ---
+cmd_run() {
+	ensure_config
+	if pid_alive "$RUN_DIR/jetty.pid"; then die "already running in the background (pid $(cat "$RUN_DIR/jetty.pid")) - use: $0 stop"; fi
+	trap 'say "stopping..."; [ -n "$JETTY_PID" ] && kill "$JETTY_PID" 2>/dev/null; sleep 1; dpi_cleanup; [ "$PB_STARTED_BY_US" = 1 ] && pb_stop; exit 0' INT TERM
+	pb_start
+	run_cli init || { pb_stop; die "database initialisation failed"; }
+	prepare_base
+	say "Duck DPI $VERSION - web UI on http://$HTTP_HOST:$HTTP_PORT  (data: $DUCKDNS_HOME)"
+	jetty_cmd &
+	JETTY_PID=$!
+	wait "$JETTY_PID"
+	RC=$?
+	dpi_cleanup
+	[ "$PB_STARTED_BY_US" = 1 ] && pb_stop
+	exit "$RC"
+}
+
+cmd_start() {
+	ensure_config
+	if pid_alive "$RUN_DIR/jetty.pid"; then say "already running (pid $(cat "$RUN_DIR/jetty.pid"))"; exit 0; fi
+	pb_start
+	run_cli init || { pb_stop; die "database initialisation failed"; }
+	prepare_base
+	( trap '' HUP; jetty_cmd >>"$LOG_DIR/duckdns.log" 2>&1 & echo $! > "$RUN_DIR/jetty.pid" )
+	sleep 2
+	if pid_alive "$RUN_DIR/jetty.pid"; then
+		say "Duck DPI $VERSION started - http://$HTTP_HOST:$HTTP_PORT   (log: $LOG_DIR/duckdns.log, proxy log: $LOG_DIR/byedpi.log)"
+	else
+		tail -n 20 "$LOG_DIR/duckdns.log" >&2
+		pb_stop
+		die "Jetty did not start"
+	fi
+}
+
+cmd_stop() {
+	ensure_config
+	if pid_alive "$RUN_DIR/jetty.pid"; then
+		jp=$(cat "$RUN_DIR/jetty.pid")
+		kill "$jp" 2>/dev/null
+		# the web app stops the DPI proxy on its way out - give it a few seconds
+		i=0
+		while kill -0 "$jp" 2>/dev/null && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+		say "stopped web app"
+	else
+		say "web app was not running"
+	fi
+	rm -f "$RUN_DIR/jetty.pid"
+	dpi_cleanup
+	pb_stop
+}
+
+cmd_status() {
+	ensure_config
+	if pid_alive "$RUN_DIR/jetty.pid"; then say "web app : running (pid $(cat "$RUN_DIR/jetty.pid")) http://$HTTP_HOST:$HTTP_PORT"; else say "web app : stopped"; fi
+	if pid_alive "$RUN_DIR/byedpi.pid"; then say "dpi proxy : running (pid $(cat "$RUN_DIR/byedpi.pid")) - settings: $0 dpi show"; else say "dpi proxy : not running (starts with the web app when autostart is on)"; fi
+	if [ "$POCKETBASE_MANAGED" = "true" ]; then
+		if pid_alive "$RUN_DIR/pocketbase.pid"; then say "pocketbase: running (pid $(cat "$RUN_DIR/pocketbase.pid")) admin UI http://127.0.0.1:$POCKETBASE_PORT/_/"; else say "pocketbase: stopped"; fi
+	else
+		say "pocketbase: external ($(get_prop "$CONFIG_DIR/pocketbase.properties" pocketbase.url))"
+	fi
+}
+
+# runs an AdminCli command; starts PocketBase for the duration if it is not up
+cmd_admin() {
+	ensure_config
+	temp_pb=0
+	if [ "$POCKETBASE_MANAGED" = "true" ] && ! pid_alive "$RUN_DIR/pocketbase.pid"; then
+		pb_start
+		temp_pb=1
+	fi
+	run_cli "$@"
+	RC=$?
+	[ "$temp_pb" = 1 ] && pb_stop
+	exit "$RC"
+}
+
+cmd_pocketbase() {
+	ensure_config
+	exec "$APP_DIR/pocketbase/pocketbase" "$@" --dir="$DATA_DIR/pb_data"
+}
+
+cmd_byedpi() {
+	ensure_config
+	[ -x "$DPI_BIN" ] || die "ByeDPI binary not found: $DPI_BIN"
+	exec "$DPI_BIN" "$@"
+}
+
+usage() {
+	sed -n '2,20p' "$SELF" | sed 's/^# \{0,1\}//'
+}
+
+case "${1:-run}" in
+	run)         cmd_run ;;
+	start)       cmd_start ;;
+	stop)        cmd_stop ;;
+	restart)     cmd_stop; sleep 1; cmd_start ;;
+	status)      cmd_status ;;
+	user)
+		sub=${2:-}
+		case "$sub" in
+			add)    [ -n "${3:-}" ] || die "usage: $0 user add NAME"; shift 2; cmd_admin user-add "$@" ;;
+			passwd) [ -n "${3:-}" ] || die "usage: $0 user passwd NAME"; cmd_admin user-passwd "$3" ;;
+			del)    [ -n "${3:-}" ] || die "usage: $0 user del NAME"; cmd_admin user-del "$3" ;;
+			list)   cmd_admin user-list ;;
+			*)      die "usage: $0 user add|passwd|del|list" ;;
+		esac ;;
+	dpi)
+		sub=${2:-}
+		case "$sub" in
+			show)  cmd_admin dpi-show ;;
+			set)   [ -n "${3:-}" ] && [ $# -ge 4 ] || die "usage: $0 dpi set ip|port|args|sni|autostart VALUE"; cmd_admin dpi-set "$3" "$4" ;;
+			reset) cmd_admin dpi-reset ;;
+			*)     die "usage: $0 dpi show|set|reset" ;;
+		esac ;;
+	byedpi)      shift; cmd_byedpi "$@" ;;
+	import-json) [ -n "${2:-}" ] || die "usage: $0 import-json DIR"; cmd_admin import-json "$2" ;;
+	pocketbase)  shift; cmd_pocketbase "$@" ;;
+	version|--version) say "Duck DPI $VERSION" ;;
+	help|--help|-h)    usage ;;
+	*)           usage; exit 2 ;;
+esac

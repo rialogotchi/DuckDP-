@@ -1,0 +1,79 @@
+/* Duck DPI - styles for the DPI panel. Sits on top of ducky-14.css and reuses its panels. */
+
+.dpi-card { text-align: left; }
+.dpi-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.dpi-head .h2 { margin: 0; }
+
+.dpi-badge { display: inline-block; padding: 3px 12px; border-radius: 0.3em; color: #fff; font-size: 14px; line-height: 20px; background: #999; text-transform: lowercase; }
+.dpi-badge--ok { background: #468847; }
+.dpi-badge--wait { background: #c09853; }
+.dpi-badge--bad { background: #b94a48; }
+.dpi-badge--off { background: #777; }
+.dpi-badge--unknown { background: #999; }
+
+.dpi-msg { margin: 6px 0; color: rgba(255,255,255,0.82); font-size: 14px; line-height: 1.4; }
+.dpi-warn { margin: 8px 0; padding: 8px 10px; border: 1px solid #c09853; border-radius: 0.3em; background: #fcf8e3; color: #8a6d3b; font-size: 14px; }
+
+.dpi-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 10px 0; font-size: 14px; }
+.dpi-facts dt { color: rgba(255,255,255,0.65); }
+.dpi-facts dd { margin: 0; word-break: break-word; }
+.dpi-facts code, .dpi-table code { font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 13px; }
+
+.dpi-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.dpi-btn { border: 1px solid rgba(0,0,0,0.25); border-radius: 0.3em; padding: 4px 16px; font-size: 14px; line-height: 20px; cursor: pointer; color: #333; background: #f3f3f3; background-image: linear-gradient(to bottom, #fff, #e6e6e6); }
+.dpi-btn:hover:not(:disabled) { background-image: linear-gradient(to bottom, #fff, #dcdcdc); }
+.dpi-btn:disabled { opacity: 0.5; cursor: default; }
+.dpi-btn--go { color: #fff; background: #62C462; background-image: linear-gradient(to bottom, #62C462, #51A351); }
+.dpi-btn--go:hover:not(:disabled) { background-image: linear-gradient(to bottom, #6fd06f, #4b9a4b); }
+.dpi-btn--stop { color: #fff; background: #ee5f5b; background-image: linear-gradient(to bottom, #ee5f5b, #bd362f); }
+.dpi-btn--stop:hover:not(:disabled) { background-image: linear-gradient(to bottom, #f27672, #a82f29); }
+
+.dpi-link { background: none; border: 0; padding: 0; color: #bfe3ff; cursor: pointer; font-size: inherit; text-decoration: underline; }
+
+.dpi-form { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 8px 0; }
+.dpi-field { display: flex; flex-direction: column; gap: 3px; flex: 1 1 200px; font-size: 13px; color: rgba(255,255,255,0.85); }
+.dpi-field--short { flex: 0 1 110px; }
+.dpi-field--wide { flex: 1 1 100%; }
+.dpi-field em { font-style: normal; color: rgba(255,255,255,0.55); }
+.dpi-field input, .dpi-field select, .dpi-field textarea {
+	font-size: 14px; line-height: 20px; padding: 4px 6px; border: 1px solid #ccc; background: #fff; color: #333;
+	width: 100%; box-sizing: border-box; font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+.dpi-field textarea { resize: vertical; }
+.dpi-check { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: rgba(255,255,255,0.9); margin-right: 14px; cursor: pointer; }
+.dpi-lists { margin: 8px 0; display: flex; flex-wrap: wrap; row-gap: 4px; }
+
+.dpi-feedback { min-height: 20px; margin: 8px 0 0; font-size: 14px; }
+.dpi-feedback--ok { color: #b9f2b9; }
+.dpi-feedback--bad { color: #ffc7c4; }
+
+.dpi-progress { height: 6px; background: rgba(255,255,255,0.25); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+.dpi-progress > div { height: 100%; width: 0; background: #62C462; transition: width 0.4s; }
+
+.dpi-tablewrap { overflow-x: auto; }
+.dpi-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+.dpi-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid rgba(255,255,255,0.5); color: rgba(255,255,255,0.8); font-weight: bold; }
+.dpi-table td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.2); vertical-align: top; }
+.dpi-table td code { word-break: break-all; }
+.dpi-pct { display: inline-block; padding: 1px 8px; border-radius: 0.3em; color: #fff; font-size: 13px; white-space: nowrap; }
+.dpi-pct--good { background: #468847; }
+.dpi-pct--mid { background: #c09853; }
+.dpi-pct--low { background: #b94a48; }
+.dpi-pct--wait { background: #999; }
+.dpi-rowerr { color: #ffc7c4; font-size: 12px; margin-top: 2px; }
+
+.dpi-log { margin: 0; padding: 8px 10px; max-height: 260px; overflow: auto; background: #1e1e1e; color: #ddd; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; border-radius: 0.3em; }
+
+.dpi-foot { text-align: center; color: #777; font-size: 13px; margin: 24px 0; }
+.dpi-foot a { color: #777; text-decoration: underline; }
+
+.dpi-doc h3 { margin: 18px 0 6px; }
+.dpi-doc a, .dpi-card a { color: #bfe3ff; }
+.dpi-doc p, .dpi-doc li { line-height: 1.5; }
+.dpi-doc pre { margin: 6px 0 12px; padding: 8px 10px; background: #1e1e1e; color: #ddd; border-radius: 0.3em; overflow-x: auto; font-size: 13px; }
+.dpi-doc code { font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 13px; }
+
+@media (max-width: 600px) {
+	.dpi-facts { grid-template-columns: 1fr; }
+	.dpi-field--short { flex: 1 1 45%; }
+}

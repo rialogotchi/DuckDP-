@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true">
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+
+        <TextView android:id="@+id/status" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="Kapalı"
+            android:textSize="22sp" android:textStyle="bold" android:paddingTop="24dp" />
+
+        <Button android:id="@+id/toggle" android:layout_width="match_parent"
+            android:layout_height="64dp" android:text="Bağlan" android:layout_marginTop="12dp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Hazır strateji" android:layout_marginTop="20dp" />
+        <Spinner android:id="@+id/preset" android:layout_width="match_parent" android:layout_height="48dp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="ByeDPI komut satırı" android:layout_marginTop="8dp" />
+        <EditText android:id="@+id/args" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions"
+            android:fontFamily="monospace" android:textSize="12sp" android:minLines="3" />
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <EditText android:id="@+id/sni" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:hint="Sahte SNI" android:inputType="textUri" />
+            <EditText android:id="@+id/port" android:layout_width="90dp"
+                android:layout_height="wrap_content" android:hint="Port" android:inputType="number" />
+            <EditText android:id="@+id/dns" android:layout_width="0dp" android:layout_weight="1"
+                android:layout_height="wrap_content" android:hint="DNS" android:inputType="textUri" />
+        </LinearLayout>
+
+        <Switch android:id="@+id/ipv6" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="IPv6 trafiğini de tünelle" />
+
+        <Button android:id="@+id/find" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="En iyi stratejiyi bul (Discord, Roblox, YouTube)"
+            android:layout_marginTop="12dp" />
+        <TextView android:id="@+id/findStatus" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:textSize="12sp" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Günlük" android:layout_marginTop="16dp" />
+        <TextView android:id="@+id/log" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:fontFamily="monospace" android:textSize="11sp"
+            android:textIsSelectable="true" />
+    </LinearLayout>
+</ScrollView>
