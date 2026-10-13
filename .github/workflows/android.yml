@@ -5,7 +5,7 @@ on:
     paths: ['android/**', '.github/workflows/android.yml']
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Fetch native sources (ByeDPI + tun2socks)
